@@ -66,6 +66,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <libgen.h>
+#include <dirent.h>
 #include <pwd.h>
 #include <grp.h>
 
@@ -316,6 +317,89 @@ _get_dbtime(void)
 }
 
 static int
+remove_entry_at(int parent_fd, const char *name)
+{
+	struct stat st;
+	int child_fd, ret = 0;
+	DIR *d;
+	struct dirent *de;
+
+	if (fstatat(parent_fd, name, &st, AT_SYMLINK_NOFOLLOW) != 0)
+		return (errno == ENOENT) ? 0 : -1;
+	if (!S_ISDIR(st.st_mode))
+		return unlinkat(parent_fd, name, 0);
+
+	child_fd = openat(parent_fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (child_fd < 0)
+		return -1;
+	d = fdopendir(child_fd);
+	if (!d) {
+		close(child_fd);
+		return -1;
+	}
+	while ((de = readdir(d)) != NULL) {
+		if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+			continue;
+		if (remove_entry_at(child_fd, de->d_name) != 0)
+			ret = -1;
+	}
+	closedir(d);
+	if (unlinkat(parent_fd, name, AT_REMOVEDIR) != 0)
+		ret = -1;
+	return ret;
+}
+
+/* Remove a file or directory tree. Missing paths are treated as success. */
+static int
+remove_path(const char *path)
+{
+	const char *slash = strrchr(path, '/');
+	const char *base;
+	char dirbuf[PATH_MAX];
+	int parent_fd, ret;
+
+	if (slash == NULL) {
+		parent_fd = open(".", O_RDONLY | O_DIRECTORY);
+		base = path;
+	} else if (slash == path) {
+		parent_fd = open("/", O_RDONLY | O_DIRECTORY);
+		base = slash + 1;
+	} else {
+		size_t dlen = slash - path;
+		if (dlen >= sizeof(dirbuf))
+			return -1;
+		memcpy(dirbuf, path, dlen);
+		dirbuf[dlen] = '\0';
+		parent_fd = open(dirbuf, O_RDONLY | O_DIRECTORY);
+		base = slash + 1;
+	}
+	if (parent_fd < 0)
+		return (errno == ENOENT) ? 0 : -1;
+	if (*base == '\0') {
+		close(parent_fd);
+		return -1;
+	}
+	ret = remove_entry_at(parent_fd, base);
+	close(parent_fd);
+	return ret;
+}
+
+/* Wipe the on-disk sqlite DB and art cache under db_path. */
+static int
+clean_db_cache(void)
+{
+	char path[PATH_MAX];
+	int ret = 0;
+	snprintf(path, sizeof(path), "%s/files.db", db_path);
+	if (remove_path(path) != 0)
+		ret = -1;
+	snprintf(path, sizeof(path), "%s/art_cache", db_path);
+	if (remove_path(path) != 0)
+		ret = -1;
+	return ret;
+}
+
+static int
 open_db(sqlite3 **sq3)
 {
 	char path[PATH_MAX];
@@ -345,7 +429,6 @@ static void
 check_db(sqlite3 *db, int new_db, pid_t *scanner_pid)
 {
 	struct media_dir_s *media_path = NULL;
-	char cmd[PATH_MAX*2];
 	char **result;
 	int i, rows = 0;
 	int ret;
@@ -402,8 +485,7 @@ rescan:
 				ret, DB_VERSION);
 		sqlite3_close(db);
 
-		snprintf(cmd, sizeof(cmd), "rm -rf %s/files.db %s/art_cache", db_path, db_path);
-		if (system(cmd) != 0)
+		if (clean_db_cache() != 0)
 			DPRINTF(E_FATAL, L_GENERAL, "Failed to clean old file cache!  Exiting...\n");
 
 		open_db(&db);
@@ -580,7 +662,6 @@ init(int argc, char **argv)
 	int pid;
 	int daemon_flag = 0;
 	int verbose_flag = 0;
-	int options_flag = 0;
 	struct sigaction sa;
 	const char * presurl = NULL;
 	const char * optionsfile = NULL;
@@ -604,7 +685,6 @@ init(int argc, char **argv)
 		if (strcmp(argv[i-1], "-f") == 0)
 		{
 			optionsfile = argv[i];
-			options_flag = 1;
 			break;
 		}
 	}
@@ -967,8 +1047,7 @@ init(int argc, char **argv)
 			SETFLAG(RESCAN_MASK);
 			break;
 		case 'R':
-			snprintf(buf, sizeof(buf), "rm -rf %s/files.db %s/art_cache", db_path, db_path);
-			if (system(buf) != 0)
+			if (clean_db_cache() != 0)
 				DPRINTF(E_FATAL, L_GENERAL, "Failed to clean old file cache %s. EXITING\n", db_path);
 			break;
 		case 'u':
