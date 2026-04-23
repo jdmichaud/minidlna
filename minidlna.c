@@ -525,9 +525,43 @@ static void init_nls(void)
 	if (!messages)
 		messages = "unset";
 	locale_dir = bindtextdomain("minidlna", getenv("TEXTDOMAINDIR"));
-	DPRINTF(E_DEBUG, L_GENERAL, "Using locale dir '%s' and locale langauge %s/%s\n", locale_dir, messages, ctype);
+	DPRINTF(E_DEBUG, L_GENERAL, "Using locale dir '%s' and locale language %s/%s\n", locale_dir, messages, ctype);
 	textdomain("minidlna");
 #endif
+}
+
+/* Populate db_path, log_path, and pidfilename with user-writable defaults
+ * ($XDG_CACHE_HOME or $HOME/.cache for data, $XDG_RUNTIME_DIR for the pid
+ * file) when they still hold the compile-time /var/... values. Config-file
+ * and command-line settings override by running before/after this. */
+static void
+apply_user_defaults(void)
+{
+	static char pidbuf[PATH_MAX];
+	const char *home = getenv("HOME");
+	const char *xdg_cache = getenv("XDG_CACHE_HOME");
+	const char *xdg_runtime = getenv("XDG_RUNTIME_DIR");
+	char cache_dir[PATH_MAX] = {0};
+
+	if (xdg_cache && *xdg_cache)
+		snprintf(cache_dir, sizeof(cache_dir), "%s/minidlna", xdg_cache);
+	else if (home && *home)
+		snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/minidlna", home);
+
+	if (!log_path[0] && cache_dir[0])
+		strncpyt(log_path, cache_dir, sizeof(log_path));
+	if (!db_path[0] && cache_dir[0])
+		strncpyt(db_path, cache_dir, sizeof(db_path));
+
+	if (pidfilename && strcmp(pidfilename, "/var/run/minidlna/minidlna.pid") == 0) {
+		if (xdg_runtime && *xdg_runtime) {
+			snprintf(pidbuf, sizeof(pidbuf), "%s/minidlna.pid", xdg_runtime);
+			pidfilename = pidbuf;
+		} else if (cache_dir[0]) {
+			snprintf(pidbuf, sizeof(pidbuf), "%s/minidlna.pid", cache_dir);
+			pidfilename = pidbuf;
+		}
+	}
 }
 
 /* init phase :
@@ -548,7 +582,8 @@ init(int argc, char **argv)
 	int options_flag = 0;
 	struct sigaction sa;
 	const char * presurl = NULL;
-	const char * optionsfile = "/etc/minidlna.conf";
+	const char * optionsfile = NULL;
+	char user_configpath[PATH_MAX] = {0};
 	char mac_str[13];
 	char *string, *word;
 	char *path;
@@ -589,14 +624,34 @@ init(int argc, char **argv)
 	runtime_vars.root_container = NULL;
 	runtime_vars.ifaces[0] = NULL;
 
+	/* If -f was not given, search user config paths, then /etc. */
+	if (!optionsfile)
+	{
+		const char *home = getenv("HOME");
+		const char *xdg_cfg = getenv("XDG_CONFIG_HOME");
+		if (xdg_cfg && *xdg_cfg)
+			snprintf(user_configpath, sizeof(user_configpath),
+				"%s/minidlna/minidlna.conf", xdg_cfg);
+		else if (home && *home)
+			snprintf(user_configpath, sizeof(user_configpath),
+				"%s/.config/minidlna/minidlna.conf", home);
+
+		if (user_configpath[0] && access(user_configpath, F_OK) == 0)
+			optionsfile = user_configpath;
+		else if (access("/etc/minidlna.conf", F_OK) == 0)
+			optionsfile = "/etc/minidlna.conf";
+		else
+			DPRINTF(E_FATAL, L_GENERAL,
+				"No configuration file found. Tried %s%s/etc/minidlna.conf. Use -f <path> to specify one.\n",
+				user_configpath[0] ? user_configpath : "",
+				user_configpath[0] ? " and " : "");
+	}
+
 	/* read options file first since
 	 * command line arguments have final say */
 	if (readoptionsfile(optionsfile) < 0)
-	{
-		/* only error if file exists or using -f */
-		if(access(optionsfile, F_OK) == 0 || options_flag)
-			DPRINTF(E_FATAL, L_GENERAL, "Error reading configuration file %s\n", optionsfile);
-	}
+		DPRINTF(E_FATAL, L_GENERAL, "Error reading configuration file %s\n", optionsfile);
+	DPRINTF(E_WARN, L_GENERAL, "Loaded configuration file %s\n", optionsfile);
 
 	for (i=0; i<num_options; i++)
 	{
@@ -817,6 +872,7 @@ init(int argc, char **argv)
 				optionsfile);
 		}
 	}
+	apply_user_defaults();
 	if (!log_path[0])
 		strncpyt(log_path, DEFAULT_LOG_PATH, sizeof(log_path));
 	if (!db_path[0])
@@ -1018,9 +1074,9 @@ init(int argc, char **argv)
 	else
 	{
 		pid = process_daemonize();
-		if (access(db_path, F_OK) != 0)
-			make_dir(db_path, S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO);
 	}
+	if (access(db_path, F_OK) != 0)
+		make_dir(db_path, S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO);
 	if (log_init(log_level) < 0)
 		DPRINTF(E_FATAL, L_GENERAL, "Failed to open log file '%s/" LOGFILE_NAME "': %s\n",
 			log_path, strerror(errno));

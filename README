@@ -3,7 +3,11 @@
 This is a fork of the original MiniDLNA project from https://sourceforge.net/p/minidlna/git/ci/master/tree/
 
 What is added in this fork:
-- Be able to compile statically on debian with a recent ffmpeg version (>5.1).
+- Add the ability to compile statically on debian with a recent ffmpeg version (>5.1).
+- Some changes on the configuration file:
+    - do not use defaults
+    - log where the configuration files are probed and exit if no file found
+    - add ~/.config/minidlna as config file path
 
 ## Static build (Debian 13)
 
