@@ -8,6 +8,7 @@ What is added in this fork:
     - do not use defaults
     - log where the configuration files are probed and exit if no file found
     - add ~/.config/minidlna as config file path
+- By default, minidlna now starts in non-daemon mode. -d is now for deamon mode.
 
 ## Static build (Debian 13)
 

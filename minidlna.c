@@ -577,7 +577,7 @@ init(int argc, char **argv)
 {
 	int i;
 	int pid;
-	int debug_flag = 0;
+	int daemon_flag = 0;
 	int verbose_flag = 0;
 	int options_flag = 0;
 	struct sigaction sa;
@@ -928,7 +928,7 @@ init(int argc, char **argv)
 				DPRINTF(E_FATAL, L_GENERAL, "Option -%c takes one argument.\n", argv[i][1]);
 			break;
 		case 'd':
-			debug_flag = 1;
+			daemon_flag = 1;
 		case 'v':
 			verbose_flag = 1;
 			break;
@@ -1035,7 +1035,7 @@ init(int argc, char **argv)
 #endif
 			"\nNotes:\n\tNotify interval is in seconds. Default is 895 seconds.\n"
 			"\tDefault pid file is %s.\n"
-			"\tWith -d minidlna will run in debug mode (not daemonize).\n"
+			"\tBy default minidlna runs in the foreground; -d daemonizes it.\n"
 			"\t-w sets the presentation url. Default is http address on port 80\n"
 			"\t-v enables verbose output\n"
 			"\t-h displays this text\n"
@@ -1058,22 +1058,15 @@ init(int argc, char **argv)
 	else if (!log_level)
 		log_level = log_str;
 
-	/* Set the default log to stdout */
-	if (debug_flag)
+	/* Default is foreground; -d switches to daemon (background) mode. */
+	if (daemon_flag)
 	{
-		pid = getpid();
-		strcpy(log_str+65, "maxdebug");
-		log_level = log_str;
-		log_path[0] = '\0';
-	}
-	else if (GETFLAG(SYSTEMD_MASK))
-	{
-		pid = getpid();
-		log_path[0] = '\0';
+		pid = process_daemonize();
 	}
 	else
 	{
-		pid = process_daemonize();
+		pid = getpid();
+		log_path[0] = '\0';
 	}
 	if (access(db_path, F_OK) != 0)
 		make_dir(db_path, S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO);
