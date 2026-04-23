@@ -1,3 +1,47 @@
+## MiniDLNA fork
+
+This is a fork of the original MiniDLNA project from https://sourceforge.net/p/minidlna/git/ci/master/tree/
+
+What is added in this fork:
+- Be able to compile statically on debian with a recent ffmpeg version (>5.1).
+
+## Static build (Debian 13)
+
+1. Install tools and deps:
+
+    sudo apt install build-essential autoconf automake autopoint gettext \
+        pkg-config libexif-dev libjpeg-dev libflac-dev libvorbis-dev \
+        libsqlite3-dev libavformat-dev
+
+2. Build static libid3tag (Debian ships only .so):
+
+    cd /tmp
+    wget "https://downloads.sourceforge.net/project/mad/libid3tag/0.15.1b/libid3tag-0.15.1b.tar.gz"
+    tar xf libid3tag-0.15.1b.tar.gz && cd libid3tag-0.15.1b
+    ./configure --enable-static --disable-shared --prefix=/usr/local --with-pic
+    make && sudo make install
+
+3. Build minimal static ffmpeg:
+
+    cd /tmp
+    wget https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz
+    tar xf ffmpeg-7.1.tar.xz && cd ffmpeg-7.1
+    ./configure --prefix=/usr/local \
+        --enable-static --disable-shared --enable-pic \
+        --disable-programs --disable-doc --disable-network \
+        --disable-autodetect --disable-x86asm --disable-debug \
+        --enable-zlib
+    make -j$(nproc) && sudo make install && sudo ldconfig
+
+4. Build MiniDLNA:
+
+    ./autogen.sh
+    CFLAGS="-O2" CPPFLAGS="-I/usr/local/include" LDFLAGS="-Wl,-s -L/usr/local/lib" \
+        ./configure --enable-static --enable-lto
+    make
+
+## Original README
+
 MiniDLNA project
 (c) 2009 Justin Maggard
 Portions (c) 2006-2007 Thomas Bernard
