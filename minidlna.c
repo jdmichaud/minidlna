@@ -329,6 +329,7 @@ open_db(sqlite3 **sq3)
 	}
 	if (sqlite3_open(path, &db) != SQLITE_OK)
 		DPRINTF(E_FATAL, L_GENERAL, "ERROR: Failed to open sqlite database!  Exiting...\n");
+	DPRINTF(E_INFO, L_GENERAL, "Using database %s\n", path);
 	if (sq3)
 		*sq3 = db;
 	sqlite3_busy_timeout(db, 5000);
@@ -588,7 +589,7 @@ init(int argc, char **argv)
 	char *string, *word;
 	char *path;
 	char buf[PATH_MAX];
-	char log_str[75] = "general,artwork,database,inotify,scanner,metadata,http,ssdp,tivo=warn";
+	char log_str[75] = "general,artwork,database,inotify,scanner,metadata,http,ssdp,tivo=info";
 	char *log_level = NULL;
 	struct media_dir_s *media_dir;
 	int ifaces = 0;
@@ -651,7 +652,7 @@ init(int argc, char **argv)
 	 * command line arguments have final say */
 	if (readoptionsfile(optionsfile) < 0)
 		DPRINTF(E_FATAL, L_GENERAL, "Error reading configuration file %s\n", optionsfile);
-	DPRINTF(E_WARN, L_GENERAL, "Loaded configuration file %s\n", optionsfile);
+	DPRINTF(E_INFO, L_GENERAL, "Loaded configuration file %s\n", optionsfile);
 
 	for (i=0; i<num_options; i++)
 	{
@@ -1173,14 +1174,14 @@ main(int argc, char **argv)
 #endif
 
 	for (i = 0; i < L_MAX; i++)
-		log_level[i] = E_WARN;
+		log_level[i] = E_INFO;
 
 	ret = init(argc, argv);
 	if (ret != 0)
 		return 1;
 	init_nls();
 
-	DPRINTF(E_WARN, L_GENERAL, "Starting " SERVER_NAME " version " MINIDLNA_VERSION ".\n");
+	DPRINTF(E_INFO, L_GENERAL, "Starting " SERVER_NAME " version " MINIDLNA_VERSION ".\n");
 	if (sqlite3_libversion_number() < 3005001)
 	{
 		DPRINTF(E_WARN, L_GENERAL, "SQLite library is old.  Please use version 3.5.1 or newer.\n");
@@ -1228,7 +1229,7 @@ main(int argc, char **argv)
 	shttpl = OpenAndConfHTTPSocket(runtime_vars.port);
 	if (shttpl < 0)
 		DPRINTF(E_FATAL, L_GENERAL, "Failed to open socket for HTTP. EXITING\n");
-	DPRINTF(E_WARN, L_GENERAL, "HTTP listening on port %d\n", runtime_vars.port);
+	DPRINTF(E_INFO, L_GENERAL, "HTTP listening on port %d\n", runtime_vars.port);
 	httpev = (struct event ){ .fd = shttpl, .rdwr = EVENT_READ, .process = ProcessListen };
 	event_module.add(&httpev);
 

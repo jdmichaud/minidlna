@@ -29,7 +29,7 @@
 #include "log.h"
 
 static FILE *log_fp = NULL;
-static const int _default_log_level = E_WARN;
+static const int _default_log_level = E_INFO;
 int log_level[L_MAX];
 
 const char *facility_name[] = {
