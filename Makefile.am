@@ -62,7 +62,7 @@ minidlnad_LDADD = \
 	@LIBEXIF_LIBS@ \
 	@LIBINTL@ \
 	@LIBICONV@ \
-	-lFLAC $(flacogglibs) $(vorbislibs) $(avahilibs)
+	-lFLAC $(flacogglibs) $(vorbislibs) $(avahilibs) -lm
 
 testupnpdescgen_SOURCES = testupnpdescgen.c upnpdescgen.c
 testupnpdescgen_LDADD = \
@@ -72,7 +72,7 @@ testupnpdescgen_LDADD = \
 	@LIBAVFORMAT_LIBS@ \
 	@LIBAVUTIL_LIBS@ \
 	@LIBEXIF_LIBS@ \
-	-lFLAC $(flacogglibs) $(vorbislibs) $(avahilibs)
+	-lFLAC $(flacogglibs) $(vorbislibs) $(avahilibs) -lm
 
 SUFFIXES = .tmpl .
 
